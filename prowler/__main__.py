@@ -38,10 +38,10 @@ from prowler.providers.common.audit_info import set_provider_audit_info
 from prowler.providers.common.outputs import set_provider_output_options
 
 
-def prowler():
+def prowler(args=None):
     # Parse Arguments
     parser = ProwlerArgumentParser()
-    args = parser.parse()
+    args = parser.parse(args=args)
 
     # Save Arguments
     provider = args.provider
