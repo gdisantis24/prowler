@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 from pkgutil import walk_packages
+from resource import RLIMIT_NOFILE, getrlimit
 from types import ModuleType
 from typing import Any
 
@@ -108,8 +109,8 @@ def exclude_services_to_run(
 # Load checks from checklist.json
 def parse_checks_from_file(input_file: str, provider: str) -> set:
     checks_to_execute = set()
-    f = open_file(input_file)
-    json_file = parse_json_file(f)
+    with open_file(input_file) as f:
+        json_file = parse_json_file(f)
 
     for check_name in json_file[provider]:
         checks_to_execute.add(check_name)
@@ -122,7 +123,10 @@ def list_services(provider: str) -> set():
     checks_tuple = recover_checks_from_provider(provider)
     for _, check_path in checks_tuple:
         # Format: /absolute_path/prowler/providers/{provider}/services/{service_name}/{check_name}
-        service_name = check_path.split("/")[-2]
+        if os.name == "nt":
+            service_name = check_path.split("\\")[-2]
+        else:
+            service_name = check_path.split("/")[-2]
         available_services.add(service_name)
     return sorted(available_services)
 
@@ -353,6 +357,13 @@ def execute_checks(
         audit_progress=0,
     )
 
+    # Check ulimit for the maximum system open files
+    soft, _ = getrlimit(RLIMIT_NOFILE)
+    if soft < 4096:
+        logger.warning(
+            f"Your session file descriptors limit ({soft} open files) is below 4096. We recommend to increase it to avoid errors. Solve it running this command `ulimit -n 4096`. For more info visit https://docs.prowler.cloud/en/latest/troubleshooting/"
+        )
+
     # Execution with the --only-logs flag
     if audit_output_options.only_logs:
         for check_name in checks_to_execute:
@@ -517,10 +528,8 @@ def get_checks_from_input_arn(audit_resources: list, provider: str) -> set:
         for resource in audit_resources:
             service = resource.split(":")[2]
             sub_service = resource.split(":")[5].split("/")[0].replace("-", "_")
-
-            if (
-                service != "wafv2" and service != "waf"
-            ):  # WAF Services does not have checks
+            # WAF Services does not have checks
+            if service != "wafv2" and service != "waf":
                 # Parse services when they are different in the ARNs
                 if service == "lambda":
                     service = "awslambda"
@@ -528,7 +537,14 @@ def get_checks_from_input_arn(audit_resources: list, provider: str) -> set:
                     service = "elb"
                 elif service == "logs":
                     service = "cloudwatch"
-                service_list.add(service)
+                # Check if Prowler has checks in service
+                try:
+                    list_modules(provider, service)
+                except ModuleNotFoundError:
+                    # Service is not supported
+                    pass
+                else:
+                    service_list.add(service)
 
                 # Get subservices to execute only applicable checks
                 if service not in services_without_subservices:

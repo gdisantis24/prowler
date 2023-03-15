@@ -77,7 +77,9 @@ jobs:
           tags: |
             ${{ secrets.DOCKER_HUB_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.LATEST_TAG }}
             ${{ secrets.PUBLIC_ECR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.LATEST_TAG }}
-          file: ${{ env.DOCKERFILE_PATH }}
+          file: ${{ env.DOCKERFILE_PATH }}          
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build container image (release)
         if: github.event_name == 'release'
@@ -93,6 +95,8 @@ jobs:
             ${{ secrets.PUBLIC_ECR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}
             ${{ secrets.PUBLIC_ECR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.STABLE_TAG }}
           file: ${{ env.DOCKERFILE_PATH }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   dispatch-action:
     needs: container-build-push
@@ -101,7 +105,7 @@ jobs:
       - name: Get latest commit info
         if: github.event_name == 'push'
         run: |
-          LATEST_COMMIT_HASH=$(echo ${{ github.event.head }} | cut -b -6)
+          LATEST_COMMIT_HASH=$(echo ${{ github.event.after }} | cut -b -7)
           echo "LATEST_COMMIT_HASH=${LATEST_COMMIT_HASH}" >> $GITHUB_ENV
       - name: Dispatch event for latest
         if: github.event_name == 'push'

@@ -1,9 +1,14 @@
 import json
+import os
 import sys
+import tempfile
 from hashlib import sha512
 from io import TextIOWrapper
 from os.path import exists
 from typing import Any
+
+from detect_secrets import SecretsCollection
+from detect_secrets.settings import default_settings
 
 from prowler.lib.logger import logger
 
@@ -11,6 +16,11 @@ from prowler.lib.logger import logger
 def open_file(input_file: str, mode: str = "r") -> TextIOWrapper:
     try:
         f = open(input_file, mode)
+    except OSError:
+        logger.critical(
+            "Ooops! You reached your user session maximum open files. To solve this issue, increase the shell session limit by running this command `ulimit -n 4096`. For more info visit https://docs.prowler.cloud/en/latest/troubleshooting/"
+        )
+        sys.exit(1)
     except Exception as e:
         logger.critical(
             f"{input_file}: {e.__class__.__name__}[{e.__traceback__.tb_lineno}]"
@@ -49,3 +59,20 @@ def file_exists(filename: str):
 # create sha512 hash for string
 def hash_sha512(string: str) -> str:
     return sha512(string.encode("utf-8")).hexdigest()[0:9]
+
+
+def detect_secrets_scan(data):
+    temp_data_file = tempfile.NamedTemporaryFile(delete=False)
+    temp_data_file.write(bytes(data, encoding="raw_unicode_escape"))
+    temp_data_file.close()
+
+    secrets = SecretsCollection()
+    with default_settings():
+        secrets.scan_file(temp_data_file.name)
+    os.remove(temp_data_file.name)
+
+    detect_secrets_output = secrets.json()
+    if detect_secrets_output:
+        return detect_secrets_output[temp_data_file.name]
+    else:
+        return None

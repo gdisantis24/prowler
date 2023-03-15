@@ -19,7 +19,7 @@ class emr_cluster_publicly_accesible(Check):
                 report.region = cluster.region
                 report.resource_id = cluster.id
                 report.resource_arn = cluster.arn
-
+                report.resource_tags = cluster.tags
                 report.status = "PASS"
                 report.status_extended = (
                     f"EMR Cluster {cluster.id} is not publicly accessible"
@@ -28,12 +28,14 @@ class emr_cluster_publicly_accesible(Check):
                 # their Security Groups for the Master,
                 # the Slaves and the additional ones
                 if cluster.public:
-
                     # Check Public Master Security Groups
                     master_node_sg_groups = deepcopy(
                         cluster.master.additional_security_groups_id
                     )
-                    master_node_sg_groups.append(cluster.master.security_group_id)
+                    if master_node_sg_groups:
+                        master_node_sg_groups.append(cluster.master.security_group_id)
+                    else:
+                        master_node_sg_groups = [cluster.master.security_group_id]
 
                     master_public_security_groups = []
                     for master_sg in master_node_sg_groups:
@@ -52,7 +54,10 @@ class emr_cluster_publicly_accesible(Check):
                     slave_node_sg_groups = deepcopy(
                         cluster.slave.additional_security_groups_id
                     )
-                    slave_node_sg_groups.append(cluster.slave.security_group_id)
+                    if slave_node_sg_groups:
+                        slave_node_sg_groups.append(cluster.slave.security_group_id)
+                    else:
+                        slave_node_sg_groups = [cluster.slave.security_group_id]
 
                     slave_public_security_groups = []
                     for slave_sg in slave_node_sg_groups:
